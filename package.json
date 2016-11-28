@@ -1,0 +1,30 @@
+{
+  "name": "tidycalc",
+  "version": "0.0.1",
+  "description": "Fast lookup for tidy data",
+  "main": "tidycalc.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drewsynan/tidycalc.git"
+  },
+  "keywords": [
+    "tidy",
+    "data",
+    "table",
+    "lookup"
+  ],
+  "author": "Drew Synan",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/drewsynan/tidycalc/issues"
+  },
+  "homepage": "https://github.com/drewsynan/tidycalc#readme",
+  "dependencies": {
+    "d3": "^4.4.0",
+    "minimist": "^1.2.0",
+    "s3-oo": "0.0.2"
+  }
+}
