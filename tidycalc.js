@@ -138,11 +138,7 @@ function tidycalc(indexedData) {
 			results = extract(results, extractVar);
 		}
 
-		if(results.length) {
-			return results[0];
-		} else {
-			return results;
-		}
+		return results[0];
 	};
 
 	reader.values = function values(query) {
