@@ -106,7 +106,7 @@ function tidycalc(indexedData) {
 			var focused = focusIndex(query);
 			if(focused === undefined) {
 				// no matching rows found
-				console.warn("No matching rows found for " + query);
+				//console.warn("No matching rows found for " + query);
 				return [];
 			}
 			var ptrs = get(focused, '$');
@@ -116,7 +116,7 @@ function tidycalc(indexedData) {
 
 			return results;
 		} catch(e) {
-			console.warn(e);
+			//console.warn(e);
 			return [];
 		}
 	}
@@ -141,13 +141,13 @@ function tidycalc(indexedData) {
 		return results[0];
 	};
 
-	reader.values = function values(query) {
+	reader.levels = function levels(query) {
 		query = processQuery(query);
 		try {
 			var focused = focusIndex(query);
 			return unhash(get(focused, '$$'));
 		} catch(e) {
-			console.warn("No values found for " + query);
+			console.warn("No level values found for " + query);
 			return [];
 		}
 	}
@@ -155,6 +155,21 @@ function tidycalc(indexedData) {
 	return reader;
 }
 
-typeof module !== "undefined" ? module.exports = tidycalc : window.tidycalc = tidycalc;
+var isNodejs = typeof module !== "undefined";
+var isAngular = typeof angular === "object";
+var isBrowser = typeof window === "object";
+
+if(isNodejs) {
+	module.exports = tidycalc;
+} else if(isAngular) {
+	angular.module('ngTidycalc', [])
+		   .provider('tidycalc', function(){
+		   		this.$get = function(){
+		   			return tidycalc;
+		   		};
+		   });
+} else {
+	window.tidycalc = tidycalc;
+}
 
 }());

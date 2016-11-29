@@ -252,21 +252,24 @@ function main() {
 		var fname = "make-index.js" // todo: split __filename on os separator
 
 		console.log("\nUSAGE:");
-		console.log("node " + fname + " [column_names] --csv=source.csv --out=out.js \n--varName=Name [--noHash] [--slim]");
+		console.log("node " + fname + " [column_names] --csv=source.csv --out=out.js \n[--moduleName=Name] [--noHash] [--slim] [--angular2]");
 		console.log("If no column names are given all columns will be included in the index.");
 		return 1;
 	}
 
 	var args = parseArgs(process.argv.slice(2));
 	var inFile = args.csv || "source.csv";
-	var jsVarName = args.varName;
+	var moduleName = args.moduleName;
+	var isAngular2 = args.angular2 !== undefined;
 
 	var outFile;
 	if(args.out) {
 		outFile = args.out;
 	} else {
-		if(jsVarName) {
-			outFile = "out.js";
+		if(moduleName && !isAngular2) {
+			outFile = moduleName + ".js";
+		} else if(moduleName && isAngular2) {
+			outFile = "ng-" + moduleName.toLowerCase() +".js";
 		} else {
 			outFile = "out.json";
 		}
@@ -280,13 +283,37 @@ function main() {
 		hash = identityHash();
 	}
 
+	function makeWindowModule(varName, data){
+		var outString = ";(function(d){" +
+							"return d." + varName + " = " + JSON.stringify(data) + ";" +
+							"})(window))";
+		return outString;
+	}
+
+	function makeAngular2Module(varName, data) {
+		var outString = "angular.module('" + varName + "', ['ngTidycalc'])" +
+			".provider('" + varName + "', function(){" +
+				"this.$get = function(tidycalc) {" +
+					"return tidycalc(" + JSON.stringify(data) + ");" +
+				"};" +
+			"});";
+
+		return outString;
+	}
+
+	function makeJson(data) {
+		return JSON.stringify(data);
+	}
+
 	var processed = loadCsv(inFile, cols, slimIndex);
 	var outString;
 
-	if(jsVarName) {
-		outString = ";(function(d){ return d." + jsVarName + " = " + JSON.stringify(processed) + "; }(window))";
+	if(moduleName && !isAngular2) {
+		outString = makeWindowModule(moduleName, processed);
+	} else if(moduleName && isAngular2) {
+		outString = makeAngular2Module(moduleName, processed);
 	} else {
-		outString = JSON.stringify(processed);
+		outString = makeJson(processed);
 	}
 
 	saveData(outString, outFile, false);
