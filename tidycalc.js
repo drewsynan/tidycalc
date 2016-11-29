@@ -2,136 +2,161 @@
 function tidycalc(indexedData) {
 	indexedData = Object.freeze(indexedData);
 
-	function hash(value) 	{ return indexedData.hash[value]; 	}
-	function unhash(value)	{ return indexedData.unhash[value];	}
+	function hash(value) 	{ 
+		function hash1(v) {
+			var hashed = indexedData.hash[v];
+			if(hashed === undefined) {
+				throw new Error("Could not hash " + v +": not in hash table");
+			}
+			return hashed;
+		}
+
+		// hash an array 
+		if(Array.isArray(value)) {
+			return value.map(hash1);
+		} else if (!Array.isArray(value) && typeof value === "object") {
+			var hashed = Object.create(null);
+			var keys = getKeys(value);
+			for(var i=0; i<keys.length; i++) {
+				var key = keys[i];
+				hashed[hash1(key)] = hash(value);
+			}
+			return hashed;
+		} else {
+			return hash1(value);
+		}
+	}
+	function unhash(value)	{
+		// unhash a value
+		function unhash1(v) {
+			var unhashed = indexedData.unhash[v];
+			if(unhashed === undefined) {
+				throw new Error("Could not unhash " + v + ": value not found in hash table");
+			}
+			return unhashed;
+		}
+
+		// unhash an array
+		if(Array.isArray(value)) {
+			return value.map(unhash1);
+		
+		// unhash an object
+		} else if(!Array.isArray(value) && typeof value === "object") {
+			var unhashed = Object.create(null);
+			getKeys(value).forEach(function(key){
+				unhashed[unhash(key)] = unhash(value[key]);
+			});
+
+			return unhashed;
+		} else {
+			return unhash1(value);
+		}
+	}
 	function get(data, key)	{ return data[key];					}
 	function getKeys(data)	{ return Object.keys(data);			}
+	function unhashRow(rowPtr) {
+		var hashedRow = get(get(indexedData, 'data'), rowPtr);
+		return unhash(hashedRow);
+	}
+	function processQuery(query) {
+		if(query === undefined) {
+			query = [];
+		} else if(typeof query !== "object") {
+			query = [].concat(query);
+		}
 
+		if(!Array.isArray(query) && typeof query === "object") {
+			if(get(indexedData, 'indexOrder') !== undefined) {
+				throw new Error("Cannot use object notation for queries on slimmed (ordered) index. Use array notation instead.");
+			}
+			query = Object.keys(query).reduce(function(list, key){
+				var term = query[key];
+				if(term === undefined || term === null) { // stop processing
+					return list.concat(key);
+				} else {
+					return list.concat(key).concat(term);
+				}
+			}, []);
+		} else if(!Array.isArray(query)) {
+			throw new Error("Invalid query");
+		}
 
-	var extractor = function(query) {
+		return query;
+	}
+
+	function extract(rows, varName) {
+		function extract1(row) {
+			return row[varName];
+		}
+		rows = [].concat(rows);
+		return rows.map(extract1);
+	}
+
+	function focusIndex(query) {
+		return query.reduce(function(subIndex, term){
+				return get(subIndex, hash(term));
+			}, get(indexedData, 'index'));
+	}
+
+	function select(query, limit) {
+		query = processQuery(query);
+		limit = limit || 0;
+
 		try {
-			if(!Array.isArray(query) && typeof query === "object") {
-				if(get(indexedData, 'indexOrder') !== undefined) {
-					throw new Error("Cannot use object notation for queries on slimmed (ordered) index. Use array notation instead.");
-				}
-
-				// Object.keys(query).reduce(function(list, key){
-				// 	return list.concat(key).concat(query[key]);
-				// }, []);
-
-				var list = [];
-				var keys = Object.keys(query);
-				for(var i=0; i<keys.length; i++) {
-					list.push(keys[i]);
-					list.push(query[keys[i]]);
-				}
-
-				query = list;
-			} else if(!Array.isArray(query)) {
-				throw new Error("Invalid query");
+			var focused = focusIndex(query);
+			if(focused === undefined) {
+				// no matching rows found
+				console.warn("No matching rows found for " + query);
+				return [];
 			}
+			var ptrs = get(focused, '$');
 
-			// var ptrs = query.reduce(function(acc, term){
-			// 	var hashed = indexedData.hash[term];
-			// 	var subIndex = acc[hashed];
-			// 	return subIndex;
-			// }, indexedData.index);
-
-			
-			var queried = get(indexedData, 'index');
-			for(var i=0; i<query.length; i++) {
-				var term = query[i];
-				var hashed = hash(term);
-				queried = get(queried, hashed);
-			}
-
-			var ptrs = get(queried, '$');
-			var results = [];
-			for(var i=0; i<ptrs.length; i++){
-				var hashedRow = get(indexedData.data, get(ptrs, i));
-				var unhashed = Object.create(null);
-
-				var keys = getKeys(hashedRow);
-
-				for(var j=0; j<keys.length; j++) {
-					unhashed[unhash(keys[j])] = unhash(get(hashedRow, keys[j]));
-				}
-
-				results.push(unhashed);
-			}
+			if(limit > 0) { ptrs = ptrs.slice(0, limit); }
+			results = ptrs.map(unhashRow);
 
 			return results;
-			// return ptrs.$.map(function(ptr){
-			// 	var hashed = indexedData.data[ptr];
-			// 	var unhashed = Object.create(null);
-
-			// 	Object.keys(hashed).forEach(function(key){
-			// 		unhashed[indexedData.unhash[key]] = indexedData.unhash[hashed[key]];
-			// 	});
-
-			// 	return unhashed;
-			// });
-
-
 		} catch(e) {
-			console.error(e);
+			console.warn(e);
 			return [];
-		}
-	};
-
-	extractor.all = function(query) {
-		query = query || [];
-		try {
-			if(!Array.isArray(query) && typeof query === "object") {
-				if(get(indexedData, 'indexOrder') !== undefined) {
-					throw new Error("Cannot use object notation for queries on slimmed (ordered) index. Use array notation instead.");
-				}
-				var list = [];
-				var keys = Object.keys(query);
-
-				for(var i=0; i<keys.length; i++) {
-					var key = keys[i];
-					list.push(key);
-					if(query[key] !== null && query[key] !== undefined) {
-						list.push(query[key]);
-					} else {
-						// only one null at a time, skip over the rest of the query
-						i = keys.length;
-					}
-				}
-				query = list;
-
-			} else if(!Array.isArray(query)) {
-				throw new Error("Invalid query");
-			}
-
-			// var hashedNames = query.reduce(function(acc, term){
-			// 	var hashed = indexedData.hash[term];
-			// 	var subIndex = acc[hashed];
-			// 	return subIndex;
-			// }, indexedData.index).$$;
-
-			// return hashedNames.map(function(name){ return indexedData.unhash[name]; });
-			var subIndex = get(indexedData, 'index');
-			for(var i=0; i<query.length; i++) {
-				var term = query[i];
-				var hashed = hash(term);
-				subIndex = get(subIndex, hashed);
-			}
-
-			var hashedNames = get(subIndex, '$$');
-			var unhashedNames = [];
-			for(var i=0; i<hashedNames.length; i++) {
-				unhashedNames.push(unhash(hashedNames[i]));
-			}
-			return unhashedNames;
-
-		} catch(e) {
-			return undefined;
 		}
 	}
 
-	return extractor;
+	var reader = function reader(){};
+
+	reader.data = unhashRow;
+	reader.selectMany = function selectMany(query, extractVar) {
+		var results = select(query, 0);
+		if(extractVar !== undefined) { results = extract(results, extractVar); }
+
+		return results;
+	};
+
+	reader.selectOne = function selectOne(query, extractVar) {
+		var results = select(query, 1);
+
+		if(extractVar !== undefined) {
+			results = extract(results, extractVar);
+		}
+
+		if(results.length) {
+			return results[0];
+		} else {
+			return results;
+		}
+	};
+
+	reader.values = function values(query) {
+		query = processQuery(query);
+		try {
+			var focused = focusIndex(query);
+			return unhash(get(focused, '$$'));
+		} catch(e) {
+			console.warn("No values found for " + query);
+			return [];
+		}
+	}
+
+	return reader;
 }
 
 typeof module !== "undefined" ? module.exports = tidycalc : window.tidycalc = tidycalc;
