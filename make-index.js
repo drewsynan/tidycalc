@@ -261,15 +261,18 @@ function main() {
 	var inFile = args.csv || "source.csv";
 	var moduleName = args.moduleName;
 	var isAngular2 = args.angular2 !== undefined;
+	var isEs6 = args.es6 !== undefined;
 
 	var outFile;
 	if(args.out) {
 		outFile = args.out;
 	} else {
-		if(moduleName && !isAngular2) {
-			outFile = moduleName + ".js";
-		} else if(moduleName && isAngular2) {
-			outFile = "ng-" + moduleName.toLowerCase() +".js";
+		if(moduleName) {
+			if (isAngular2) {
+				outFile = "ng-" + moduleName.toLowerCase() +".js";
+			} else {
+				outFile = moduleName + ".js";
+			}
 		} else {
 			outFile = "out.json";
 		}
@@ -284,20 +287,25 @@ function main() {
 	}
 
 	function makeWindowModule(varName, data){
-		var outString = ";(function(d){" +
-							"return d." + varName + " = " + JSON.stringify(data) + ";" +
-							"})(window))";
+		var outString = `;(function(d){
+						       return d.${varName} = ${JSON.stringify(data)};
+						   })(window);`;
 		return outString;
 	}
 
 	function makeAngular2Module(varName, data) {
-		var outString = "angular.module('" + varName + "', ['ngTidycalc'])" +
-			".provider('" + varName + "', function(){" +
-				"this.$get = function(tidycalc) {" +
-					"return tidycalc(" + JSON.stringify(data) + ");" +
-				"};" +
-			"});";
+		var outString = `angular.module('${varName}', ['ngTidycalc'])
+			.provider('${varName}', function(){
+				this.$get = function(tidycalc) {
+					return tidycalc(${JSON.stringify(data)});
+				};
+			});`;
 
+		return outString;
+	}
+
+	function makeEs6Module(varName, data) {
+		var outString = `export default ${JSON.stringify(data)};`;
 		return outString;
 	}
 
@@ -308,10 +316,14 @@ function main() {
 	var processed = loadCsv(inFile, cols, slimIndex);
 	var outString;
 
-	if(moduleName && !isAngular2) {
-		outString = makeWindowModule(moduleName, processed);
-	} else if(moduleName && isAngular2) {
-		outString = makeAngular2Module(moduleName, processed);
+	if(moduleName) {
+		if (isAngular2) {
+			outString = makeAngular2Module(moduleName, processed);
+		} else if (isEs6) {
+			outString = makeEs6Module(moduleName, processed);
+		} else {
+			outString = makeWindowModule(moduleName, processed);
+		}
 	} else {
 		outString = makeJson(processed);
 	}

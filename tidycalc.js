@@ -55,8 +55,12 @@ function tidycalc(indexedData) {
 	function get(data, key)	{ return data[key];					}
 	function getKeys(data)	{ return Object.keys(data);			}
 	function unhashRow(rowPtr) {
-		var hashedRow = get(get(indexedData, 'data'), rowPtr);
-		return unhash(hashedRow);
+		if (rowPtr === undefined) {
+			return get(indexedData, 'data').map(unhash);
+		} else {
+			var hashedRow = get(get(indexedData, 'data'), rowPtr);
+			return unhash(hashedRow);
+		}
 	}
 	function processQuery(query) {
 		if(query === undefined) {
